@@ -1,0 +1,205 @@
+
+1. Imports
+from cvzone.HandTrackingModule import HandDetector
+import cv2
+import os
+import numpy as np
+
+These lines import the necessary libraries:
+- cvzone.HandTrackingModule: This is used for hand detection.
+- cv2: This is the OpenCV library for computer vision tasks.
+- os: This is used to handle file paths.
+- numpy: This is used for numerical operations.
+
+2. Parameters
+width, height = 1280, 720
+gestureThreshold = 720
+folderPath = "Presentation"
+
+These lines set up some initial parameters:
+- width, height: Dimensions for the video capture.
+- gestureThreshold: A threshold to distinguish gestures (though not actively used in this part).
+- folderPath: Path to the folder containing presentation images.
+
+
+
+3. Camera Setup
+cap = cv2.VideoCapture(0)
+cap.set(3, width)
+cap.set(4, height)
+
+This sets up the camera for video capture:
+- cv2.VideoCapture(0): Opens the default camera.
+- cap.set(3, width) and cap.set(4, height): Set the width and height of the capture.
+
+4. Hand Detector
+detectorHand = HandDetector(detectionCon=0.9, maxHands=1)
+
+Initializes the hand detector:
+- detectionCon=0.9: Detection confidence threshold.
+- maxHands=1: Maximum number of hands to detect.
+
+5. Variables
+imgList = []
+delay = 30
+buttonPressed = False
+counter = 0
+drawMode = False
+imgNumber = 0
+delayCounter = 0
+annotations = [[]]
+annotationNumber = -1
+annotationStart = False
+hs, ws = int(120  1), int(213  1)
+
+These lines initialize various variables used in the script:
+- imgList: Placeholder for images (not used further).
+- delay, buttonPressed, counter: Used for managing button press delays.
+- drawMode: Not actively used in this code.
+- imgNumber: Index of the current image.
+- delayCounter: For delaying button actions.
+- annotations: List to store drawing annotations.
+- annotationNumber: Keeps track of the annotation sequence.
+- annotationStart: Indicates if annotation has started.
+- hs, ws: Height and width of the small image preview.
+
+6. Get list of presentation images
+pathImages = sorted(os.listdir(folderPath), key=len)
+print(pathImages)
+
+This gets the list of images in the presentation folder:
+- os.listdir(folderPath): Lists all files in the folder.
+- sorted(..., key=len): Sorts the files by their length (name length).
+
+7. Main Loop
+while True:
+    success, img = cap.read()
+    img = cv2.flip(img, 1)
+    pathFullImage = os.path.join(folderPath, pathImages[imgNumber])
+    imgCurrent = cv2.imread(pathFullImage)
+
+Starts the main loop:
+- success, img = cap.read(): Captures a frame from the camera.
+- img = cv2.flip(img, 1): Flips the image horizontally.
+- pathFullImage = os.path.join(folderPath, pathImages[imgNumber]): Gets the current image path.
+- imgCurrent = cv2.imread(pathFullImage): Reads the current presentation image.
+
+8. Hand Detection
+hands, img = detectorHand.findHands(img)
+
+Detects hands in the frame:
+- hands, img = detectorHand.findHands(img): Finds hands and their landmarks in the image.
+
+9. Gesture and Drawing Logic
+if hands and buttonPressed is False:
+    hand = hands[0]
+    cx, cy = hand["center"]
+    lmList = hand["lmList"]
+    fingers = detectorHand.fingersUp(hand)
+
+Checks if hands are detected and no button is currently pressed:
+- hand = hands[0]: Gets the first detected hand.
+- cx, cy = hand["center"]: Gets the center coordinates of the hand.
+- lmList = hand["lmList"]: Gets the list of landmark points.
+- fingers = detectorHand.fingersUp(hand): Determines which fingers are up.
+
+10. Gesture Handling
+xVal = int(np.interp(lmList[8][0], [width // 2, width], [0, width]))
+yVal = int(np.interp(lmList[8][1], [150, height-150], [0, height]))
+indexFinger = xVal, yVal
+
+Converts landmark coordinates for drawing:
+- np.interp: Interpolates values to fit within the frame dimensions.
+- indexFinger: Coordinates of the index finger tip.
+
+11. Gesture Commands
+if fingers == [1, 0, 0, 0, 0]:
+    print("Left")
+    buttonPressed = True
+    if imgNumber > 0:
+        imgNumber -= 1
+        annotations = [[]]
+        annotationNumber = -1
+        annotationStart = False
+if fingers == [0, 0, 0, 0, 1]:
+    print("Right")
+    buttonPressed = True
+    if imgNumber < len(pathImages) - 1:
+        imgNumber += 1
+        annotations = [[]]
+        annotationNumber = -1
+        annotationStart = False
+
+Handles left and right swipe gestures:
+- fingers == [1, 0, 0, 0, 0]: Swipe left (index finger up).
+- fingers == [0, 0, 0, 0, 1]: Swipe right (pinky finger up).
+
+12. Drawing Logic
+if fingers == [0, 1, 1, 0, 0]:
+    cv2.circle(imgCurrent, indexFinger, 7, (0, 0, 255), cv2.FILLED)
+if fingers == [0, 1, 0, 0, 0]:
+    if annotationStart is False:
+        annotationStart = True
+        annotationNumber += 1
+        annotations.append([])
+    annotations[annotationNumber].append(indexFinger)
+    cv2.circle(imgCurrent, indexFinger, 5, (0, 0, 255), cv2.FILLED)
+else:
+    annotationStart = False
+
+Handles drawing gestures:
+- fingers == [0, 1, 1, 0, 0]: Draw a circle (index and middle fingers up).
+- fingers == [0, 1, 0, 0, 0]: Start/continue annotation (index finger up).
+
+
+13. Delete Last Annotation
+if fingers == [0, 1, 1, 1, 0]:
+    if annotations:
+        annotations.pop(-1)
+        annotationNumber -= 1
+        buttonPressed = True
+
+Deletes the last annotation:
+- fingers == [0, 1, 1, 1, 0]: Delete gesture (index, middle, and ring fingers up).
+
+14. Button Press Delay
+if buttonPressed:
+    counter += 1
+    if counter > delay:
+        counter = 0
+        buttonPressed = False
+
+Manages delay after a button press to prevent rapid multiple actions.
+
+15. Draw Annotations
+for i, annotation in enumerate(annotations):
+    for j in range(len(annotation)):
+        if j != 0:
+            cv2.line(imgCurrent, annotation[j - 1], annotation[j], (0, 0, 200), 12)
+
+
+Draws the annotations on the current image:
+- cv2.line: Draws lines between points in each annotation.
+
+16. Display Small Image
+imgSmall = cv2.resize(img, (ws, hs))
+h, w, _ = imgCurrent.shape
+imgCurrent[0:hs, w - ws: w] = imgSmall
+
+Displays a small preview of the camera frame on the presentation image.
+
+17. Display Images
+cv2.imshow("Slides", imgCurrent)
+cv2.imshow("Image", img)
+
+Shows the current presentation image and the camera frame:
+- cv2.imshow: Opens windows to display the images.
+
+18. Exit Condition
+key = cv2.waitKey(1)
+if key == ord('q'):
+    break
+
+Checks if the 'q' key is pressed to exit the loop and end the program:
+- cv2.waitKey(1): Waits for a key press for 1 ms.
+- if key == ord('q'): Breaks the loop if 'q' is pressed.
